@@ -5,21 +5,11 @@ fig 2.1
     - this is the virtualization, where a unique cpu can run more than one programa at the same time
     ./cpu A & ./cpu B & ./cpu C & ./cpu D &
 
+
 */
 #include <stdio.h>
 #include <stdlib.h>
-#include <sys/time.h>
-
-void 
-Spin(int seconds) 
-{
-  struct timeval start, end;
-  gettimeofday(&start, NULL);
-
-  do {
-    gettimeofday(&end, NULL);
-  } while ((end.tv_sec - start.tv_sec) < seconds);
-}
+#include "common.h"
 
 int
 main (int argc, char *argv[]) 

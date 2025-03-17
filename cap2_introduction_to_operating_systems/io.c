@@ -8,19 +8,23 @@
   - files are shared across diferent processes
   - protocols to dont let the system crash -> journaling or copy-to-write -> to avoid losing data
 */
-
+#include <stdio.h>
 #include <assert.h>
 #include <sys/time.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <string.h>
 
 int
 main (int argc, char * argv[]) 
 {
   int fd = open("/tmp/file", O_WRONLY | O_CREAT | O_TRUNC, S_IRWXU);
-  assert(fd > -1);
-  int rc = write(fd, "hello world\n", 13);
-  assert(rc == 13);
+  assert(fd >= 0);
+  char buffer[20];
+  sprintf(buffer, "hello world\n");
+  int rc = write(fd, buffer, strlen(buffer));
+  assert(rc == strlen(buffer));
+  fsync(fd);
   close(fd);
   return 0;
 }
