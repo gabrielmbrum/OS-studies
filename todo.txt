@@ -1,0 +1,7 @@
+- compare and fix all my codes (comparing w his gh repo: https://github.com/remzi-arpacidusseau/ostep-code)
+
+- code everythig from the beggining
+
+- ask gpt for resume all the caps (12, 13, 15, 16 e 17) to get a simple vision about all topics and be prepared to the class
+
+
