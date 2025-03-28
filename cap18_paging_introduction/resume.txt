@@ -1,30 +1,29 @@
 begin with 
-<> movl 21, %eax 
+    <> movl 21, %eax 
 
 system translate the virtual address 21 into physical address 117
-before load to address 117, 
-must fetch the proper page table entry (PTE) from process's page table
-performe translation and finally get the data from physical memory
+before load to address 117, fetch the proper page table entry (PTE) from process's page table
+perform translation, and finally get the data from physical memory
 
-hardware must know there the page table is for the current process
+hardware must know where the page table is for the currently-running process
 lets assume a single page-table base register conatins the physical address of the page table
-to find the location of PTE
+to find the location of PTE, hw perform the following functions
 
-<> VPN = (VirtualAddress & VPN_MASK) >> SHIFT
-<> PTEAddr = PageTableBaseRegister + (VPN * sizeof(PTE))
+    <> VPN = (VirtualAddress & VPN_MASK) >> SHIFT
+    <> PTEAddr = PageTableBaseRegister + (VPN * sizeof(PTE))
 
 VPN MASK picks out the VPN bits from the full virtual address 
 SHIFT is set to 4 (we are using a 16 bytes address space with 4 bytes pages)
 the shifts make virtual address 21 (010101) becomes 01 -> i.e virutal page 1
-
 then we use this value as a index into the array of PTEs
-hardware tech the PTE from memory -> extract the PFN and concate with the offset
+
+hardware fech the PTE from memory -> extract the PFN and concate with the offset
 physical address is formed!
 
 <> offset = VirtualAddress & OFFSET_MASK
 <> PhysAddr = (PFN << SHIFT) | offset
 
-/******************** * * * **************************/
+/******************** FULL CODE **************************/
 
 // extract the VPN from the virtual address
 VPN = (VirtualAddress & VPN_MASK) >> SHIFT
@@ -45,4 +44,4 @@ else
   PhysAddr = (PFN << SHIFT) | offset
   Register = AccessMemory(PhysAddr)
 
-/******************** * * * **************************/
+/******************** FULL CODE **************************/
