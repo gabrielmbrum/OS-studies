@@ -1,0 +1,169 @@
+# intro
+
+<crux> how to create and control threads? </crux>
+
+(27.1)
+# thread creation
+
+first thing is to create new threads
+
+<code>
+
+  #include <phtread.h>
+
+  int
+  pthread_create (
+    pthread_t * thread,
+    const pthread_attr_t * attr,
+    void * (*start_routine) (void*),
+    void * agr);
+
+</code>
+
+thread: will interact with this thread, it's initialized in this function
+
+attr: used to specify any atrributes this thread might have (stack size, scheduling priority), it's initialized with pthread_attr_init()
+
+function pointer: tells us a function name (start_routine) and which returns a value of type void (can change (void*) to (int) or any shit)
+
+arg: passed to the function where the thread begins execution. 
+
+why do we need these void pointers?
+- allows us to pass in any type of arguemnt
+- the return is the same
+
+<code>
+// creating a thread
+
+#include <pthread.h>
+
+typedef struct __myarg_t {
+  int a;
+  int b;
+} myarg_t;
+
+void *mythread (void *arg) {
+  myarg_t *m = (myarg_t *) arg;
+  printf("%d %d\n", m->a, m->b);
+  return NULL;
+}
+
+int
+main (int argc, char *argv[]) {
+  pthread_t p;
+  int rc;
+
+  myarg_t args;
+  args.a = 10;
+  args.b = 20;
+  rc = pthread_create(&p, NULL, mythread, &args);
+  ...
+}
+
+</code>
+
+(27.2)
+# thread completion
+
+what if u want to wait for a thread to be completed?
+you must call pthread_join() !
+
+int pthread_join (pthread_t thread, void **value_ptr);
+
+thread: used to specify which thread to wait for
+
+**value_ptr: returns the value you expect
+
+<code>
+// waiting for thread completion
+
+#include <stdio.h>
+#include <pthread.h>
+#include <assert.h>
+#include <stdlib.h>
+
+typedef strcut __myarg_t {
+  int a;
+  int b;
+} myarg_t;
+
+typedef struct __myret_t {
+  int x;
+  int y;
+} myret_t;
+
+void *mythread (void *arg) {
+  myarg_t *m = (myarg_t *) arg;
+  printf("%d %d\n", m->a, m->b);
+  myret_t *r = Malloc(sizeof(myret_t));
+  r->x = 1;
+  r->y = 2;
+  return (void *) r;
+}
+
+int
+main (int argc, char *argv[]) {
+  int rc;
+  pthread_t p;
+  myret_t *m;
+
+  myarg_t args;
+  args.a = 10;
+  args.b = 20;
+  Pthread_create(%p, NULL, mythread, &args);
+  Pthread_join(p, (void **) &m);
+  printf("returned %d %d\n", m->x, m->y);
+  return 0;
+}
+
+</code>
+
+myret_t is used to return the values from the join
+
+life can be simpler
+- passing a single value 
+
+as the example below
+
+<code>
+// simpler argument passing to a thread
+
+void *mythread (void *arg) {
+  int m = (int) arg;
+  printf("%d\n", m);
+  return (void *) (arg + 1);
+}
+
+int
+main (int argc, char *argv[]) {
+  int rc, m;
+  pthread_t p;
+
+  Pthread_create(%p, NULL, mythread, (void *) 100);
+  Pthread_join(p, (void **) &m);
+  printf("returned %d\n", m);
+  return 0;
+}
+
+</code>
+
+but we have to take care to NEVER return a pointer which refers to something allocated on the thread's call stack!!!!
+
+as this example
+
+  void *mythread (void *arg) {
+    myarg_t *m = (myarg_t *) arg;
+    printf("%d %d\n", m->a, m->b);
+    myret_r r; // ALLOCATED ON STACK ! BAD !!1!11!!!
+    r.x = 1;
+    r.y = 2;
+    return (void *) &r;
+  }
+
+using _create and then _join its a strange way to create a thread
+there is an easier wat to do this: procedure call!
+
+(27.3)
+# locks
+
+
