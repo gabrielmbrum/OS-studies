@@ -166,4 +166,114 @@ there is an easier wat to do this: procedure call!
 (27.3)
 # locks
 
+beyond creation and join, the most useful set of functions are the mutual exclusion to a critical section via locks
 
+int pthread_mutex_lock(pthread_mutex_t *mutex);
+int pthread_mutex_unlock(pthread_mutex_t *mutex);
+
+example:
+  pthread_mutex_t lock;
+  pthread_mutex_lock(&lock);
+  x = x + 1;
+  pthread_mutex_unlock(&lock);
+
+when calls a pthread_mutex_lock()
+  if (no other thread holds the lock)
+    thread acquire the lock and access the critical section
+
+  else
+    waits until the thread with the lock unlock it // may be stuck for a while
+
+unfortunately this shit is broken! LOL
+1) lack of proper initialization: no validation of correct values to begin and work with when (un)lock are called
+
+  there is two solutions
+  a) using PTHREAD_MUTEX_INITALIZER
+    
+    pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
+
+    this sets the lock to the default values and makes the lock usable
+
+  b) using pthread_mutex_init()
+
+    int rc = pthread_mutex_init(&lock, NULL);
+    assert(rc == 0); // always check success
+
+
+2) fails to check errors code when calling lock and unlock (these routines can also fail!)
+  if a non-processed error occurs, multiple threads can access the critical section all at once
+
+
+  a) minimal approach: wrappers
+
+  <code>
+  (27.4)
+  // use this to clean code but checking failures
+  // only use if exiting program is OK upon failure
+
+  void Pthread_mutex_lock(pthread_mutex_t *mutex) {
+    int rc = pthread_mutex_lock(mutex);
+    assert(rc == 0);
+  }
+
+  </code>
+
+
+it's importante to notice that lock and unlock aren't the only routines that pthreads has to interact with locks, there are more two also relevants
+
+  // returns failure if the lock is already held
+  int pthread_mutex_trylock(pthread_mutex_t *mutex);
+
+  // returns after a timeout of after acquiring the lock
+  int pthread_mutex_timedlock(pthread_mutex_t *mutex,
+                              struct timespec *abs_timeout);
+
+(27.4)
+# condition variables
+
+useful when some kind of signaling must take place between thraeds, if one thread is waiting for another to do something before it can continue
+
+  // puths the calling thread to sleep (just wait)
+  // usually when something in the program has changed that the now sleeping thread might care about
+  // has a 2nd parameter for the lock that is released
+  int pthread_cond_wait(pthread_cond_t *cond,
+                          pthread_mutex_t *mutex);
+
+  int pthread_cond_signal(pthread_cond_t *cond);
+
+example of using wait
+  
+  pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
+  pthread_cond_t init = PTHREAD_COND_INTIALIZAR;
+
+  Pthread_mutex_lock(&lock);
+  while (initialized == 0)
+    Pthread_cond_wait(&init, &lock);
+  Pthread_mutex_unlock(&lock);
+
+  /*
+    after init and lock and cond, a thread checks if the initialized has yet been set to something other than zero
+      if not
+        thread simply wait
+
+  */
+
+code to wake a thread
+
+  Pthread_mutex_lock(&lock);
+  initialized = 1;
+  Pthread_cond_signal(&init);
+  Pthread_mutex_unlock(&lock);
+
+  /*
+  
+    1st : make sure that has the lock held 
+
+    2nd : 2nd argument of wait is for realising the lock
+
+  */
+
+(27.5)
+# compiling and running
+
+  prompt> gcc -o main main.c -Wall -pthread
