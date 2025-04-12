@@ -17,7 +17,7 @@ first thing is to create new threads
     const pthread_attr_t * attr,
     void * (*start_routine) (void*),
     void * agr);
-
+  
 </code>
 
 thread: will interact with this thread, it's initialized in this function
