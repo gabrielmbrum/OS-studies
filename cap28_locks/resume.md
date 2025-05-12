@@ -10,15 +10,13 @@ shared variable example
 
 to use lock we add somethings
 
-  <code>
-
+```c
   lock_t mutex;
   ...
   lock(&mutex);
   balance = balance + 1;
   unlock(&mutex);
-
-  </code>
+```
 
 lock is just a variabe of some kind (suck as mutex above), it holds the state of the lock at any instance in time:
   available (free/unlocked): no threads holds the lock
@@ -40,7 +38,7 @@ unlock():
 
 the name provided by POSIX for a lock is mutex (mutual exclusion between threads)
 
-  <code>
+```c
 
   pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 
@@ -48,7 +46,7 @@ the name provided by POSIX for a lock is mutex (mutual exclusion between threads
   balance = balance + 1;
   Pthread_mutex_unlock(&lock);
   
-  </code>
+```
 
 # 28.3 building a lock
 
@@ -69,17 +67,16 @@ first, we will establish some basic criteria
 
 for single processor systems, a solution was to disable interrupts for critical sections
 
-  <code>
+```c
 
   void lock() {
-    DisableInterrupts();
-  }
+  DisableInterrupts();
+}
+void unlock() {
+  EnableInterrupts();
+}
 
-  void unlock() {
-    EnableInterrupts();
-  }
-
-  </code>
+```
 
 we ensure the code that entered the critical section will not be interrupted, so will execute atomically
 positive point: simplicity
@@ -90,7 +87,7 @@ negative points:
 
 # 28.6 test and set (atomic exchange)
 
-  <code>
+```c
 
   // first attempt: a simple flag
 
@@ -111,27 +108,27 @@ negative points:
     mutex->flag = 0;
   }
 
-  </code>
+```
 
-the code has two problems:
-  1) correctness: T1 calls lock; spin-waiting; INTERRUPT!! -> T2 calls lock; spin-wait; set flag = 1; INTERRUPT!! -> T1 set flag = 1
-      and there are two threads inside the critical section!
+## the code has two problems:
+  ### correctness 
+    T1 calls lock; spin-waiting; INTERRUPT!! -> T2 calls lock; spin-wait; set flag = 1; INTERRUPT!! -> T1 set flag = 1
+    and there are two threads inside the critical section!
 
-  2) performance: spin-waiting wastes time waiting for another thread realease a lock 
+  ### performance 
+    spin-waiting wastes time waiting for another thread realease a lock 
 
 # 28.7 building a working spin lock
 
 what the test-and-set instruction does?
 
-  <code>
-
-  int testAndSet (int *ptr, int new) {
-    int old = *ptr;
-    *ptr = new;
-    return old;
-  }
-
-  </code>
+```c
+    int testAndSet (int *ptr, int new) {
+      int old = *ptr;
+      *ptr = new;
+      return old;
+    }
+```
 
 it returns the old value and set the ptr to the new one
 
@@ -139,41 +136,38 @@ this "test" the old value and "set" the new one
 
 this is able to build a simple spin lock
 
-  <code>
+```c
+    typedef struct __lock_t {
+      int flag;
+    } lock_t;
 
-  typedef struct __lock_t {
-    int flag;
-  } lock_t;
+    void init (lock_t *lock) {
+      lock->flag = 0;
+    }
 
-  void init (lock_t *lock) {
-    lock->flag = 0;
-  }
+    void lock (lock_t *lock) {
+      while (testAndSet(&lock->flag, 1) == 1) 
+        ;
+    }
 
-  void lock (lock_t *lock) {
-     while (testAndSet(&lock->flag, 1) == 1) 
-      ;
-  }
-
-  void unlock (lock_t *lock) {
-    lock->flag = 0;
-  }
-
-  </code>
+    void unlock (lock_t *lock) {
+      lock->flag = 0;
+    }
+```
 
 # 28.8 evaluating spin locks
 
 its correct! 
 what about fairness?
   spin locks doesnt provide any fairness guarantees -> may lead to starvation
-i
+
 what about perfomance?
   in single CPU its painful :( because when a thread has the lock, all the next threads that the CPU picks that want the lock will just spend its time slice
   in multiple CPUs, while thread B waits on CPU 2, thread A is running on CPU 1
 
 # 28.9 compare and swap
 
-  <code>
-
+```c
   int compareAndSwap (int *ptr, int expected, int new) {
     int actual = *ptr;
     if (actual == expected) 
@@ -181,25 +175,23 @@ what about perfomance?
     return actual;
   }
 
-  </code>
+```
 
 lock example:
   
-  <code>
-
+```c
   void lock (lock_t *lock) {
     while (compareAndSwap(&lock->flag, 0, 1) == 1)
       ;
   }
 
-  </code>
+```
 
- # 28.10 load-linked and store-conditional
+# 28.10 load-linked and store-conditional
 
- on the MIPS architecture the load-linked and store-conditional instrucions can be used to build locks and other concurrent structures
+on the MIPS architecture the load-linked and store-conditional instrucions can be used to build locks and other concurrent structures
 
-  <code>
-
+```c
   int loadLinked (int *ptr) {
     return *ptr;
   }
@@ -212,11 +204,9 @@ lock example:
       return 0;
     }
   }
+```
 
-  </code>
-
-  <code>
-
+```c
   void lock (lock_t *lock) {
     while (1) {
       while (loadLinked(&lock->flag) == 1)
@@ -225,32 +215,27 @@ lock example:
         return; // if no one acquired the lock, success and return! otherwise, try all it over again
     }
   }
+```
 
-  </code>
-
-  <code>
-
-  // shorter code
+```c
+  // shorter version
   
   void lock (lock_t *lock) {
     while (loadLinked(&lock->flag) == 1 || !storeConditional(&lock->flag, 1))
       ;
   }
-
-  </code>
+```
 
 
 # 28.11 fetch and add
 
-  <code>
-
+```c
   int fetchAndAdd (int *ptr) {
     int old = *ptr;
     *ptr = old + 1;
     return old;
   }
-
-  </code>
+```
 
 ticket lock concept: instead of a single value, uses a ticket and turn variable in combination to build a lock.
 when a thread whishes to acquire the lock, it does a fechAndAdd on the ticket value.
@@ -260,7 +245,7 @@ when (myturn == turn) it is that thread's turn to enter the critical section.
 
 unlock simply increments the turn, so the next waiting thread can now enters de cs.
 
-  <code>
+```c
 
   typedef struct __lock_t {
     int ticket;
@@ -282,7 +267,7 @@ unlock simply increments the turn, so the next waiting thread can now enters de 
     fetchAndAdd(&lock->turn);
   }
 
-  </code>
+```
 
 it ensures progress to all threads!!! -> fairness!!! :)
 
@@ -296,7 +281,7 @@ what to do when a context switch occurs in a critical section and threads starts
 
 if you are going to spin, just "double the CPU and pass to the next one"!
 
-  <code>
+```c
 
   void init () {
     flag = 0;
@@ -311,7 +296,7 @@ if you are going to spin, just "double the CPU and pass to the next one"!
     flag = 0;
   }
 
-  </code>
+```
 
 moves the thread from runnnig to ready state
 
@@ -326,7 +311,7 @@ will can use a queue and a support from Solaris, using park() and unparck()
   park(): put a calling thread to sleep 
   unparl(ThreadID): wake a particular thread as designated by its id
 
-  <code>
+```c
 
   typedef struct __lock_t {
     int flag;
@@ -363,7 +348,7 @@ will can use a queue and a support from Solaris, using park() and unparck()
     m->guard = 0;
   }
 
-  </code>
+```
 
 we combine test-and-set with a queue of lock waiters to a make a more efficient lock, beyond that, the queue avoids starvation
 the guard is used as a spin-lock around the flag and queue manipulation
@@ -385,7 +370,7 @@ this problem was solved by solaris with setpark()
 
 linux provides something called a futex which is similar to the Solaris interface
 
-  <code>
+```c
 
   void mutex_lock (int *mutex) {
     int v;
@@ -416,7 +401,7 @@ linux provides something called a futex which is similar to the Solaris interfac
     futex_wake(mutex);
   }
 
-  </code>
+```
 
 # 28.16 two-phase locks
 
