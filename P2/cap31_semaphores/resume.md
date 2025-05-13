@@ -33,6 +33,7 @@ int sem_post (sem_t *s) {
 Aspects of the interface:
 
 - `sem_wait()`:
+
   - will return right away, or
   - will cause the caller to suspend execution waiting for a post
 
@@ -42,7 +43,8 @@ Aspects of the interface:
   - if there is a thread waiting, wakes one up
 
 The value of semaphore:
-  - when negative, is equal to the number of waiting threads
+
+- when negative, is equal to the number of waiting threads
 
 # 31.2 Binary Semaphores (Locks)
 
@@ -57,14 +59,14 @@ sem_post(&m);
 
 X must be 1
 
-The thread has 3 schedular states: running, ready and slepping
+The thread has 3 schedular states: running, ready and sleeping
 
 # 31.3 Semaphores as Condition Variables
 
 Semaphores are also useful when a thread wants to halt its progress waiting for a condition to become true
 
 Example:
-  a thread is waiting for something to happen, while a differente thread is making that something happen and when it does, it wakes up the waiting thread
+a thread is waiting for something to happen, while a differente thread is making that something happen and when it does, it wakes up the waiting thread
 
 ```c
 sem_t s;
@@ -92,142 +94,95 @@ X must be set to 0
 
 # 31.4 The Producer/Consumer (Bounded-Buffer) Problem
 
-
 ## First Atempt
 
-  Our first ateempt at solving the problem introduces two semaphores (empty and full), which indicate when a buffer entry has been emptied or filled
+Our first ateempt at solving the problem introduces two semaphores (empty and full), which indicate when a buffer entry has been emptied or filled
 
-  The put and get routines
-  ```c
-    int buffer[MAX];
-    int fill = 0;
-    int use = 0;
+The put and get routines
 
-    void put (int value) {
-      buffer[fill] = value;
-      fill = (fill + 1) % max;
-    }
+```c
+  int buffer[MAX];
+  int fill = 0;
+  int use = 0;
 
-    int get() {
-      int tmp = buffer[use];
-      use = (use + 1) % MAX;
-      return tmp;
-    }
-  ```
+  void put (int value) {
+    buffer[fill] = value;
+    fill = (fill + 1) % max;
+  }
 
-  Adding the full and empty conditions
-  ```c
-    sem_t empty;
-    sem_t full;
+  int get() {
+    int tmp = buffer[use];
+    use = (use + 1) % MAX;
+    return tmp;
+  }
+```
 
-    void *producer (void *arg) {
-      int i;
-      for (i = 0; i < loops; i++) {
-        sem_wait(&empty);
-        put(i);
-        sem_post(&full);
-      }
-    }
+Adding the full and empty conditions
 
-    void *consumer (void *arg) {
-      int i, tmp = 0;
-      while (tmp != 1) {
-        sem_wait(&full);
-        tmp = get();
-        sem_post(&empty);
-        printf("%d\n", tmp);
-      }
-    }
-
-    int main (int argc, char *agrv[]) {
-      // ...
-      sem_init(&empty, 0, MAX);
-      sem_init(&full, 0, 0);
-      // ...
-    }
-  ```
-
-  A race condition, lets imagine there are two producers (Pa and Pb) both calling put() at the same time. assume Pa runs first, it starts to fill the first buffer entry. before Pa increment the fill counter to 1 it's interrupted and Pb runs and both puts its data into the 0th element of the buffer -> OVERWRITE!!!!
-
-## A Solution: Adding Mutual Exclusion
-  
-  We've forgotten about mutual exclusion, the filling of a buffer and incrementing of the index is a critical section and thus must be guarded.
-
-  Adding mutual exlusion (incorrectly)
-  ```c
-    sem_t empty;
-    sem_t full;
-    sem_t muntex;
-
-    void *producer (void *agr) {
-      int i;
-
-      for (i = 0; i < loops; i++) {
-        sem_wait(&mutex);
-        sem_wait(&empty);
-        put(i);
-        sem_post(&full);
-        sem_post(&mutex);
-      }
-    }
-
-    void *consumer (void *arg) {
-      int i;
-      for (i = 0; i < loops; i++) {
-        sem_wait(&mutex);
-        sem_wait(&full);
-        int tmp = get();
-        sem_post(&empty);
-        sem_post(&mutex);
-        printf("%d\n", tmp);
-      }
-    }
-
-    int main (int argc, char *argv[]) {
-      // ...
-      sem_init(&empty, 0, MAX);
-      sem_init(&full, 0, 0);
-      sem_init(&mutex, 0, 1);
-      // ...
-    }
-  ```
-
-  This doesnt runs correctly because of deadlock
-
-## Avoiding Deadlock
-
-  consumer holds the mutex and waits for a producer
-  producer stay waiting for mutex forever
-
-## Finally, A Working Solution
-
-  We simply must reduce the scope of the lock
-
-  Adding mutual exclusion (correctly)
-  ```c
+```c
   sem_t empty;
   sem_t full;
-  sem_t mutex;
 
   void *producer (void *arg) {
     int i;
     for (i = 0; i < loops; i++) {
       sem_wait(&empty);
-      sem_wait(&mutex);
-      put(iv);
-      sem_post(&mutex);
+      put(i);
       sem_post(&full);
+    }
+  }
+
+  void *consumer (void *arg) {
+    int i, tmp = 0;
+    while (tmp != 1) {
+      sem_wait(&full);
+      tmp = get();
+      sem_post(&empty);
+      printf("%d\n", tmp);
+    }
+  }
+
+  int main (int argc, char *agrv[]) {
+    // ...
+    sem_init(&empty, 0, MAX);
+    sem_init(&full, 0, 0);
+    // ...
+  }
+```
+
+A race condition, lets imagine there are two producers (Pa and Pb) both calling put() at the same time. assume Pa runs first, it starts to fill the first buffer entry. before Pa increment the fill counter to 1 it's interrupted and Pb runs and both puts its data into the 0th element of the buffer -> OVERWRITE!!!!
+
+## A Solution: Adding Mutual Exclusion
+
+We've forgotten about mutual exclusion, the filling of a buffer and incrementing of the index is a critical section and thus must be guarded.
+
+Adding mutual exlusion (incorrectly)
+
+```c
+  sem_t empty;
+  sem_t full;
+  sem_t muntex;
+
+  void *producer (void *agr) {
+    int i;
+
+    for (i = 0; i < loops; i++) {
+      sem_wait(&mutex);
+      sem_wait(&empty);
+      put(i);
+      sem_post(&full);
+      sem_post(&mutex);
     }
   }
 
   void *consumer (void *arg) {
     int i;
     for (i = 0; i < loops; i++) {
-      sem_wait(&full);
       sem_wait(&mutex);
+      sem_wait(&full);
       int tmp = get();
-      sem_post(&mutex);
       sem_post(&empty);
+      sem_post(&mutex);
       printf("%d\n", tmp);
     }
   }
@@ -239,8 +194,111 @@ X must be set to 0
     sem_init(&mutex, 0, 1);
     // ...
   }
-  ```
+```
+
+This doesnt runs correctly because of deadlock.
+If the consumer runs firts, it will decrement the mutex and stay waiting for full, but this blocks any
+producer to produce, so, it will be eternaly waiting for it.
+
+## Avoiding Deadlock
+
+consumer holds the mutex and waits for a producer
+producer stay waiting for mutex forever
+
+## Finally, A Working Solution
+
+We simply must reduce the scope of the lock
+
+Adding mutual exclusion (correctly)
+
+```c
+sem_t empty;
+sem_t full;
+sem_t mutex;
+
+void *producer (void *arg) {
+  int i;
+  for (i = 0; i < loops; i++) {
+    sem_wait(&empty);
+    sem_wait(&mutex);
+    put(iv);
+    sem_post(&mutex);
+    sem_post(&full);
+  }
+}
+
+void *consumer (void *arg) {
+  int i;
+  for (i = 0; i < loops; i++) {
+    sem_wait(&full);
+    sem_wait(&mutex);
+    int tmp = get();
+    sem_post(&mutex);
+    sem_post(&empty);
+    printf("%d\n", tmp);
+  }
+}
+
+int main (int argc, char *argv[]) {
+  // ...
+  sem_init(&empty, 0, MAX);
+  sem_init(&full, 0, 0);
+  sem_init(&mutex, 0, 1);
+  // ...
+}
+```
 
 # 31.5 Reader-Writer Locks
 
-PAGE 386
+imagine a set of operations that includes inserts and lookups.
+while inserts needs a traditional critical section, lookups simply
+read the data structure, as long as we can guarantee that no insert
+is on-going, we can allow many lookups to proceed concurrently
+
+```c
+typedef struct _rwlock_t {
+    sem_t lock;        // binary semaphore (basic lock)
+    sem_t writelock;   // used to allow ONE writer or MANY readers
+    int readers;       // count of readers reading in critical section
+} rwlock_t;
+
+void rwlock_init(rwlock_t *rw) {
+    rw->readers = 0;
+    sem_init(&rw->lock, 0, 1);
+    sem_init(&rw->writelock, 0, 1);
+}
+
+void rwlock_acquire_readlock(rwlock_t *rw) {
+    sem_wait(&rw->lock);
+    rw->readers++;  // track how many readers are inside the data structure
+    if (rw->readers == 1)
+        sem_wait(&rw->writelock); // first reader acquires writelock
+    sem_post(&rw->lock);
+}
+
+void rwlock_release_readlock(rwlock_t *rw) {
+    sem_wait(&rw->lock);
+    rw->readers--;
+    if (rw->readers == 0)
+        sem_post(&rw->writelock); // last reader releases writelock
+    sem_post(&rw->lock);
+}
+
+void rwlock_acquire_writelock(rwlock_t *rw) {
+    sem_wait(&rw->writelock);
+}
+
+void rwlock_release_writelock(rwlock_t *rw) {
+    sem_post(&rw->writelock);
+}
+```
+
+this really works, but its not fair.
+
+writers starves because of readers
+
+to solve this, its necessary to stop more readers to access when a writer asks for control
+
+# 31.6 the dining philosophers
+
+
