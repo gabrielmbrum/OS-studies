@@ -1,0 +1,24 @@
+* example of struct *
+typedef struct __header_t {
+  int size;
+  int magic;
+}
+
+* free function to use header informations *
+void free (void *ptr) {
+  header_t *htpr = (void *)ptr - sizeof(header_t);
+}
+
+-------- ---------- ---------- -------- ---------
+EMBEDDING A FREE LIST
+
+typedef struct __node_t {
+  int size;
+  struct __node_t *next;
+}node_t;
+
+// mmap() returns a pointer to a chunk of free space
+node_t *head = mmap(NULL, 4096, PROT_READ|PROT_WRITE, MAP_ANON|MAP_PRIVATE, -1, 0);
+head->size = 4096 (é o total nesse exemplo) - sizeof(node_t);
+head->next = NULL;
+
