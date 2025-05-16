@@ -182,18 +182,18 @@ Unfortunately, this mechanism is broken due to:
   There are two solutions to this:
   a) Using `PTHREAD_MUTEX_INITALIZER`:
     
-    ```c
+  
     pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
-    ```
+  
 
     This sets the lock to the default values and makes the lock usable.
 
   b) Using `pthread_mutex_init()`:
 
-    ```c
+    
     int rc = pthread_mutex_init(&lock, NULL);
     assert(rc == 0); // always check success
-    ```
+  
 
 2) Fails to check errors code when calling lock and unlock (these routines can also fail!)
   If a non-processed error occurs, multiple threads can access the critical section all at once.
