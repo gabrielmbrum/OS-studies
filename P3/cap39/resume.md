@@ -153,3 +153,146 @@ when the read returns 0 the program knows that the file is entirely read, so it 
 
 ## 39.5 Reading and Writing, but Not Sequentially
 
+sometimes, it is useful to be able to read or write to a specific offset within a file. 
+
+if you build an index over a text document, and use it to look up a specific word, you may end up reading from some random offsets.
+
+```
+  off_t lseek(int fildes, off_t offset, int whence);
+```
+
+this functions just aims to changes a variable in OS memory that tracks, for a particular process, at which offset its next r/w will start
+
+the first argument is a file descriptor, the second is the offset and the third is for historical reasons (determines exactly how the seek is performed).
+
+_whence_ cases:
+- SEEK_SET: the offset is set to offset bytes
+- SEEK_CUR: the offset is set to its current location plus offset bytes.
+- SEEK_END: the offset is set to the size of the file plus offset bytes.
+
+ways to update the offset;
+- when a read or write of _N_ bytes takes place, then offset = offset + _N_
+- explicity with _lseek_
+
+example of file struct:
+
+```c
+  struct file {
+    int ref;
+    char readable;
+    char writable;
+    struct inode *ip;
+    uint off; //offset
+  };
+```
+
+all the currently opened files in the system together are referred to as the **open file table**.  
+
+```c
+  struct {
+    struct spinlock lock;
+    struct file file[NFILE];
+  } ftable;
+```
+
+### examples
+
+#### reading a file of 300 bytes
+
+![example 1](image-1.png)
+
+important things to note:
+- offset is initialized to zero
+- offset is incremented by each _read()_ 
+- returns zero from _read()_ when the file is entirely read
+
+##### reading the same file twice
+
+![example 2](image-2.png)
+
+two file descriptors are allocated (3 and 4) and each refers to a different entry in the open file table (OFT). in the imagem OFT[10] and OFT[11] refers to the entries of the files
+
+#### *lseek()*
+process uses _lseek()_ to reposition the current offset before reading
+
+![example 3](image-3.png)
+
+here _lseek()_ call first sets the current offset to 200, the subsequent _read()_ then reads the next 50 bytes and updates the current offset accordingly.
+
+---
+
+## 39.6 Shared File Table Entries: *fork()* and *dup()*
+
+each logical reading/writing of a file is independent, and each has its own current offset while it accesses the given file.
+
+however, there are a few interesting cases where an entry in the open file table is _shared_. 
+
+### *fork*
+
+one of those cases occurs when a parent process creates a child process with _fork()_.
+
+![fork-seek.c](image-4.png)
+
+in this code, a parent creates a child and then waits for it to complete. the child adjusts the current offset via a call to _lseek()_ and then exits. finally the parent checks the current offset and prints out its value.
+
+this is the output of the code 👇
+
+![output do fork-seek.c](image-5.png)
+
+this show the relationships that connect: each process's private descriptor array, the shared OFT entry and the reference from it to the underlying file-system inode. 
+
+![processes sharing an OFTE](image-6.png)
+
+first use of **reference count** here.  when a file table entry is shared, its refcount is incremented and only when both processes close the file will the entry be removed.
+
+sharing open file table entries across parent and child is useful, if you create a number of processes that are cooperatively working on a task, they can write to the same output file.
+
+### *dup*
+
+one other case of sharing OFTE is with the use of _dup()_ system call.
+
+allows a process to create a new file descriptor that refers to the same underlying open file as an existing descriptor.
+
+code example
+
+```c
+  int main(int argc, char *argv[]) {
+    int fd = open("README", O_RDONLY);
+    assert(fd >= 0);
+    int fd2 = dup(fd);
+    // now fd and fd2 can be used interchangeably
+    return 0;
+  }
+```
+
+this is useful when writing a UNIX shell and performing operations like output redirection.
+
+---
+
+## 39.7 Writing Immediately with *fsync()*
+
+the file system, for performance reasons, will **buffer** such writes in memory for some time and then write after this timestamp.
+
+from the perspective of the calling application, writes is quickly completed and only in rare cases will data be lost.
+
+for a DBMS, development of a correct recovery protocol requires the ability to force writes to disk from time to time.
+
+to support these, the API provide the _fsync(int fd)_.
+
+this call makes the file system responds by forcing all **dirty** data to disk for the file specified.
+
+code snippet:
+```c
+  int fd = open("foo", O_CREAT|O_WRONLY|O_TRUNC, S_IRUSR|S_IWUSR); // opens the file
+  assert(fd > -1);
+  int rc = write(fd, buffer, size);
+  assert(rc == size);
+  rc = fsync(fd);
+  assert(rc == 0);
+```
+
+sometimes, its also necessary to _fsync()_ the directory that contains the file _foo_. adding this ensures not only that the file itself is on disk, but that the file, if newly created, also is durably a part of the directory.
+
+---
+
+## 39.8 Renaming Files
