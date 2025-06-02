@@ -87,4 +87,69 @@ it's managed by the OS on a per-process basis, example:
 
 ---
 
-## 39.4 
+## 39.4 Reading and Writing Files
+
+```cmdline
+  prompt> echo hello > foo
+  prompt> cat foo
+  hello
+  prompt>
+```
+
+in this code we redirect the output of the program _echo_ to the file _foo_, which contains "hello".
+
+we then use _cat_ to sse the content of the file.
+
+> how the _cat_ access the file _foo_?
+
+we can use _strace_ command to check this, by tracing the system calls made by a program.
+
+```cmdline
+  prompt> strace cat foo
+  ...
+  open("foo", O_RDONLY|O_LARGEFILE) = 3
+  read(3, "hello\n", 4096) = 6
+  write(1, "hello\n", 6) = 6
+  hello
+  read(3, "", 4096) = 0
+  close(3) = 0
+  ...
+  prompt>
+```
+
+### open
+
+the first thing that it does is open the file for reading. the flag *O_RDONLY* indicates that the file is opened only for reading. the *O_LARGEFILE* indicates that the 64-bit offset is used. the call _open()_ succeeds and returns a file descriptor, which has value of 3.
+
+> why does the first call to _open()_ returns 3?
+
+this is because the file descriptor 0, 1 and 2 are respectively to the files: standard input, standard output and standard error.
+
+### *read()*
+
+- 1st argument: file descriptor
+- 2nd argument: buffer where the result will be placed*
+- 3rd argument: the fize of the buffer 
+
+the call returns successfully returning the number of bytes it read.
+
+*: (in the strace result, it shows the results of the read as "hello\n")
+
+### *write()*
+
+a single call to the file descriptor 1 (std out).
+
+is used to write the "hello" to the screen as the _cat_ is meant to do.
+
+maybe _cat_ can call the routine _printf()_ instead of _write()_, which figures out all the formatting details passed to it.
+
+### *close()*
+
+when the read returns 0 the program knows that the file is entirely read, so it calls _close()_.
+
+> ✝️ each process maintainas an array of file descriptor, each of which refers to an entry in the system-wide **open file table**. each entry tracks which underlying file the descriptor refers to, the current offset, and other details such is readable or writable.
+
+---
+
+## 39.5 Reading and Writing, but Not Sequentially
+
