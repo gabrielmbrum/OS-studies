@@ -114,7 +114,15 @@ another reason, its the common encapsulation, that makes easier to code but keep
   v1.AddAll(v2);
   ```
 
-Condition to NOT occur deadlock
+Conditions for Deadlock
+
+- `mutual exclusion:`  T claaim exclusive control of resources that they require
+- `hold-and-wait:` T hold resources allocated to them while waiting for additional resources
+- `No preemption:` resources cant be forcibly removed from threads that are holding them
+- `Circular wait:` there exists a circular chain of threads such that each thread holds one more resources that are beign requested by the next thread in the chain
+
+
+Prevention
 
 - circular wait: ordering the acquiring of lock. ex.: L1 always before L2 (in all threads)
 - hold and wait: acquire all locks all at once
