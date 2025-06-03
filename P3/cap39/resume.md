@@ -227,7 +227,7 @@ each logical reading/writing of a file is independent, and each has its own curr
 
 however, there are a few interesting cases where an entry in the open file table is _shared_. 
 
-### *fork*
+### *fork()*
 
 one of those cases occurs when a parent process creates a child process with _fork()_.
 
@@ -247,7 +247,7 @@ first use of **reference count** here.  when a file table entry is shared, its r
 
 sharing open file table entries across parent and child is useful, if you create a number of processes that are cooperatively working on a task, they can write to the same output file.
 
-### *dup*
+### *dup()*
 
 one other case of sharing OFTE is with the use of _dup()_ system call.
 
@@ -296,3 +296,328 @@ sometimes, its also necessary to _fsync()_ the directory that contains the file 
 ---
 
 ## 39.8 Renaming Files
+
+it is useful to be able to give a file a different name.
+
+```cmdline
+  prompt> mv foo bar
+```
+
+using _strace_ we can see that _mv_ uses _rename(char *old, char *new)_ syscall.
+
+one interesting guarantee provided by this syscall is that is implemented as an **atomic** call. if the system crashes during the renaming, the file will either be named the old name or the new name, and no odd in-between.
+
+example of a file ensuring that the new file = original content + line inserted. 
+
+```c
+  int fd = open("foo.txt.tmp", O_WRONLY|O_CREAT|O_TRUNC, S_IRUSR|S_IWUSR);
+  write(fd, buffer, size); // write out new version of file
+  fsync(fd);
+  close(fd);
+  rename("foo.txt.tmp", "foo.txt");
+```
+
+the editor writes out the new version of the file under a temporary name, force it to disk and when the app is certaing that the new file metadata and contents are on the disk, rename the temporary file to the original file's name.
+
+---
+
+## 39.9 Getting Information About Files
+
+metadata of the files.
+
+system calls: _stat()_ or _fstat()_.
+
+these calls take a pathname to a file and fill in a _stat_ structure as seen in the fig below.
+
+![stat structure](image-7.png)
+
+example of infos about a file:
+- size (bytes)
+- low-level name (inode number)
+- ownership information
+- info about when the file was accessed or modified
+- ...
+
+![alt text](image-8.png)
+
+each file system keeps this type of info in a structure called an **inode**. for now, this is an persistent data structure kept by the file system that has info like we see above.
+
+---
+
+## 39.10 Removing Files
+
+> what system call does _rm_ use to remove a file?
+
+using _strace_ we see:
+![rm ex](image-9.png)
+
+it just takes the name of the file to be removed and returns zero upon success. 
+
+but... why unlink? why not delete or remove?
+
+---
+
+## 39.11 Making Directories
+
+you can never write to a directory, because it is considered file system metadata.
+
+to create a directory, a single system call _mkdir()_ is available. 
+
+![alt text](image-10.png)
+
+when such dir is created, it is considered "empty", although it does have a bare minimum of contents. it has two entries: one that refers to itself and other that refers to its parent.
+
+the former is reffered to as the "." (dot) and the latter as ".." (dot-dot). you can see it by passing a flag (-a) to the _ls_ cmdline.
+
+![alt text](image-11.png)
+
+---
+
+## 39.12 Reading Directories
+
+this is exactly what the program _ls_ does.
+
+below is an example program that prints the contents of a directory. 
+it uses three calls: _opendir()_, _readdir()_ and _closedir()_.
+
+```c
+  int main(int argc, char *argv[]) {
+    DIR *dp = opendir(".");
+    assert(dp != NULL);
+    struct dirent *d;
+    while ((d = readdir(dp)) != NULL) {
+    printf("%lu %s\n", (unsigned long) d->d_ino,
+    d->d_name);
+    }
+    closedir(dp);
+    return 0;
+  }
+```
+
+directory entry structure:
+```c
+  struct dirent {
+    char d_name[256]; // filename
+    ino_t d_ino; // inode number
+    off_t d_off; // offset to the next dirent
+    unsigned short d_reclen; // length of this record
+    unsigned char d_type; // type of file
+  };
+```
+
+---
+
+## 39.13 Deleting Directories
+
+you can delete a dir with a call to _rmdir()_ (which is used by the program of the same name, _rmdir_).
+
+rmdir has the requirement that the directory is empty.
+
+---
+
+## 39.14 Hard Links
+
+now we will understand why deleting a file results in a _unlink()_ call.
+
+another way to make an entry in the file system tree is by _link()_.
+
+the _link()_ takes two args, an old pathname and a new one.
+
+you basically create another way to refer to the same file.
+
+the cmdline _ln_ is used to do this, like in the example:
+
+```cmdline
+  prompt> echo hello > file
+  prompt> cat file
+  hello
+  prompt> ln file file2
+  prompt> cat file2
+  hello
+```
+ 
+it simply creates another name in the directory you are creating the link to, and refers it to the same inoed number of the original file.
+
+the file is **not** copied in any way, rather, you now just have two human-readable names that refer to the same file.
+
+passing _-i_ as a flag to _ls_ will print the inode number of each file (as well the file name).
+
+```cmdline
+  prompt> ls -i file file2
+  67158084 file
+  67158084 file2
+  prompt>
+```
+
+#### what really happens when you create a file..
+
+first, you are making a structure (inode) that will track virtually all relevant information about the file.
+
+second, you are _linking_ a human-readabele name to that file, and putting that link into a directory.
+
+#### why *unlink()*?
+
+if we just _rm_ a file, the links that it has will remain up, like here:
+
+```cmdline
+  prompt> rm file
+  removed ‘file’
+  prompt> cat file2
+  hello
+```
+
+when we unlink the file, it checks the **reference count** of it, this allows the file system to track how manu diff file names have been linked to this inode.
+
+only when ref count reaches zero it stops.
+
+you can check the ref count using _stat()_, example:
+![link count example](image-12.png)
+
+---
+
+## 39.15 Symbolic Links
+
+there is one other type of link called **symbolic link/soft link**.
+you cant create a link to a directory with a hard link, either you cant hard link to files in other disk partitions. 
+
+you can create by using _ln -s_.
+
+```cmdline
+  prompt> echo hello > file
+  prompt> ln -s file file2
+  prompt> cat file2
+  hello
+```
+
+#### differences between the hard and the soft 😏
+
+- **1st**: a symbolic link is actually a file itself, of a different type.
+
+```cmdline
+  prompt> stat file
+  ... regular file ...
+  prompt> stat file2
+  ... symbolic link ...
+```
+
+ls also reveals it. the first char is a _"l"_ (regular files is _"-"_ | directories is _"d"_)
+
+```cmdline
+  prompt> ls -al
+  drwxr-x--- 2 remzi remzi 29 May 3 19:10 ./
+  drwxr-x--- 27 remzi remzi 4096 May 3 15:14 ../
+  -rw-r----- 1 remzi remzi 6 May 3 19:10 file
+  lrwxrwxrwx 1 remzi remzi 4 May 3 19:10 file2 -> file
+```
+
+the length of the soft link relies on the pathname length.
+
+#### dangling reference
+
+```cmdline
+  prompt> echo hello > file
+  prompt> ln -s file file2
+  prompt> cat file2
+  hello
+  prompt> rm file
+  prompt> cat file2
+  cat: file2: No such file or directory
+```
+
+---
+
+## 39.16 Permission Bits and Access Control Lists
+
+how the files and directories are shared among users, it needs to have some **permission bits**.
+
+example with the foo.txt:
+
+```cmdline
+  prompt> ls -l foo.txt
+  -rw-r--r-- 1 remzi wheel 0 Aug 24 16:29 foo.txt
+```
+
+it has basically three parts:
+- owner
+- group
+- other
+
+each part has its permission (r-ead w-rite e-xecute)
+
+in the output above, the group is the _wheel_.
+
+#### file mode
+
+the owner can change these permissions with _chmod_ command (changing the file mode).
+
+example:
+```cmdline
+  prompt> chmod 600 foo.txt
+```
+
+this command enables the readable bit (4) and writable bit (2) and (OR'ing thm yields the 6 above).
+
+so the command above set 6 for the owner and 0 to group and others.
+
+#### directories
+
+the exec permissions is different, it enables a user to do things like change directories (_cd_) and, with the combination of writable bit, to create files therein.
+
+#### AFS 
+
+its a file system, that does this in the form of an Access Control List (ACL) per directory. 
+
+this allows to create a very specific list of permissions.
+
+example of the access controls for a private directory in one author's AFS account:
+
+```cmdline
+  prompt> fs listacl private
+  Access list for private is
+  Normal rights:
+  system:administrators rlidwka
+  remzi rlidwka
+```
+
+---
+
+## 39.17 Making and Mounting a File System
+
+> how to assemble a full directory tree from many underlying file systems?
+
+this is done via making a file systems and then mounting them to make their contents accessible.
+
+most file systems provides the tool _mkfs_ that performs this task.
+
+give a devide (as input), such as a disk partition /my/path/to/fs, and a file system type, e.g. ext3, and it simply writes an empty file system.
+
+once such file system is created, it needs to be made accessible within the uniform file-system tree. this is done via _mount()_.
+
+mount quite simply takes an existing directory as a target **mount point** and essentially paste a new file system onto the dir tree at that point.
+
+#### example
+
+we have an unmounted ext3 file system, stored in device partition _/dev/sda1_, that has a root dir which contains two sub-directories _a_ and _b_, that both holds a single file named _foo_. 
+
+if we want to mount this at the mount point _/home/users_ we would type something like this:
+
+```cmdline
+  prompt> mount -t ext3 /dev/sda1 /home/users
+```
+
+if successfull, the mount would thus make this new file system available. now it's acesssed like this:
+
+```cmdline
+  prompt> ls /home/users/
+  a b
+```
+
+now _/home/users/_ refers to the root of the newly-mounted directory.
+
+instead of having a number of separate file systems, mount unifies all file systems into one tree, making naming uniform and convenient.
+
+---
+
+## key terms
+
+![key terms](image-13.png)
